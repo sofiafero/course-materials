@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Topic 13:   Machine Learning Fundamentals</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Nick Hagerty*   ECNS 460/560   Montana State University" />
+    <script src="13-Learning_files/header-attrs-2.27/header-attrs.js"></script>
+    <link href="13-Learning_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="13-Learning_files/remark-css-0.0.1/metropolis.css" rel="stylesheet" />
+    <link href="13-Learning_files/remark-css-0.0.1/metropolis-fonts.css" rel="stylesheet" />
+    <link rel="stylesheet" href="my-css.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Topic 13: <br> Machine Learning Fundamentals
+]
+.author[
+### Nick Hagerty* <br> ECNS 460/560 <br> Montana State University
+]
+.date[
+### <br> .small[*Slides 6-17 and 27-43 are adapted from <a href="https://github.com/edrubin/EC524W21">“Prediction and machine-learning in econometrics”</a> by Ed Rubin, used with permission, and excluded from this resource’s overall CC license.]
+]
+
+---
+
+
+name: toc
+
+&lt;style type="text/css"&gt;
+.text-small {
+  font-size: 50%;
+}
+.text-big {
+  font-size: 150%;
+}
+.small {
+  font-size: 75%;
+}
+&lt;/style&gt;
+
+
+
+
+# Table of contents
+
+1. [Overview: Statistical learning](#learning)
+
+1. [Assessing model accuracy](#accuracy)
+
+1. [Cross-validation](#resampling)
+
+
+---
+class: inverse, middle
+name: learning
+# Overview: Statistical learning
+
+&lt;!-- --- --&gt;
+&lt;!-- # Review: Goals of data analysis --&gt;
+
+&lt;!-- There are **3 main purposes** of data analysis: --&gt;
+&lt;!-- 1. .hi-turquoise[**Descriptive analysis:**] Characterize observed patterns among variables. --&gt;
+&lt;!-- 2. .hi[**Causal inference:**] Learn how Y changes as a result of an active intervention to change X. --&gt;
+&lt;!-- 3. .hi-purple[**Prediction:**] Predict the value of one variable from other information. --&gt;
+
+&lt;!-- Key differences among the 3 goals: --&gt;
+&lt;!-- 1. **Focus:** Prediction focuses on the outcome `\(\color{#6A5ACD}{\hat{Y_{i}}}\)`, causal inference on a coefficient `\(\color{#e64173}{\hat{\beta_0}}\)`. --&gt;
+&lt;!-- 2. **Selection bias** is a problem for causal inference, but not predictive or descriptive analysis. --&gt;
+&lt;!-- 3. **Interpretion:** Coefficients have meaning in causal inference and descriptive analysis, but little meaning in prediction. --&gt;
+
+
+---
+# Prediction
+
+`$$\color{#6A5ACD}{Y_i} = f(x_{0i}, x_{1i}, ..., x_{Ni}) = \color{#e64173}{\beta_0} x_{0i} + \beta_1 x_{1i} + \beta_2 x_{2i} + ... + \varepsilon_i$$`
+
+.hi-purple[**Prediction:**] Want to estimate `\(\color{#6A5ACD}{\hat{Y_{i}}}\)` given observed data `\(x_{0i}, x_{1i}, x_{2i}, ....\)`.
+- Does not matter whether your model is "correct" (the true DGP), only whether it *works.*
+
+--
+
+The idea is that we will:
+1. **Train** a model on data for which we know both `\(X\)` and `\(Y\)`.
+2. **Apply** the model to new situations where we know `\(X\)` but not `\(Y\)`.
+
+
+---
+layout: true
+# Statistical learning
+
+---
+
+The class of methods for doing prediction is called **statistical learning** or **machine learning.**
+
+First, a few definitions...
+
+
+---
+## Supervised vs. unsupervised
+
+Statistical learning is generally divided into two classes:
+
+1. .hi-slate[Supervised learning] builds ("learns") a statistical model for predicting an .hi-orange[output] `\(\left( \color{#FFA500}{\mathbf{y}} \right)\)` given a set of .hi-purple[inputs] `\(\left( \color{#6A5ACD}{x_{1},\, \ldots,\, x_{p}} \right)\)`.
+
+--
+
+2. .hi-slate[Unsupervised learning] learns relationships and structure using only .hi-purple[inputs] `\(\left( \color{#6A5ACD}{x_{1},\, \ldots,\, x_{p}} \right)\)` without any *supervising* output — letting the data "speak for itself."
+
+---
+class: clear, middle
+layout: false
+
+&lt;img src="images/comic-learning.jpg" style="display: block; margin: auto;" /&gt;
+
+.it[.smaller[[Source](https://twitter.com/athena_schools/status/1063013435779223553)]]
+
+---
+layout: true
+# Statistical learning
+
+---
+## Classification vs. Regression
+
+.hi-slate[Supervised learning] is broken into two types, based on what kind of .hi-orange[output] we want to predict:
+
+1. .hi-slate[Classification tasks] for which the values of `\(\color{#FFA500}{\mathbf{y}}\)` are discrete categories.
+&lt;br&gt;*E.g.*, race, sex, loan default, hazard, disease, flight status
+
+2. .hi-slate[Regression tasks] in which `\(\color{#FFA500}{\mathbf{y}}\)` takes on continuous, numeric values.
+&lt;br&gt;*E.g.*, price, arrival time, number of emails, temperature
+
+.note[Note] The use of .it[regression] differs from our use of .it[linear regression].
+
+---
+## Translating terms
+
+`\(\color{#6A5ACD}{\mathbf{X}}\)` (treatment variable/covariates, independent variables, regressors)
+- Now: **predictors, features.**
+
+`\(\hat{\color{#FFA500}{\mathbf{Y}}}\)` (outcome variable, dependent variable)
+- Now: **target, label.**
+
+"Estimate a model" or "fit a model"
+- Now: **Train** a model, **learn** a model.
+
+
+---
+## General framework
+
+A .turquoise[function] `\(\color{#20B2AA}{f}\)` takes .purple[inputs] `\(\color{#6A5ACD}{\mathbf{X}} = \color{#6A5ACD}{\mathbf{x}_1}, \ldots, \color{#6A5ACD}{\mathbf{x}_p}\)` and maps them to the .orange[output], along with a random, mean-zero .pink[error term] `\(\color{#e64173}{\varepsilon}\)`.
+
+`$$\color{#FFA500}{\mathbf{y}} = \color{#20B2AA}{f} \! \left( \color{#6A5ACD}{\mathbf{X}} \right) + \color{#e64173}{\varepsilon}$$`
+
+If we can estimate `\(\hat{\color{#20B2AA}{f}}\)`, then we can use `\(\color{#6A5ACD}{\mathbf{X}}_i\)` to generate predictions `\(\color{#FFA500}{\mathbf{y}}_i\)`.
+
+&lt;!-- The accuracy of `\(\hat{\color{#FFA500}{\mathbf{y}}}\)` depends upon .hi-slate[two errors]: --&gt;
+
+&lt;!-- 1. .hi-slate[Reducible error] The error due to `\(\hat{\color{#20B2AA}{f}}\)` imperfectly estimating `\(\color{#20B2AA}{f}\)`. --&gt;
+&lt;!-- &lt;br&gt;*Reducible* in the sense that we can improve `\(\hat{\color{#20B2AA}{f}}\)`. --&gt;
+
+&lt;!-- 1. .hi-slate[Irreducible error] The error component that is outside of the model `\(\color{#20B2AA}{f}\)`. --&gt;
+&lt;!-- &lt;br&gt;*Irreducible* because we defined an error term `\(\color{#e64173}{\varepsilon}\)` unexplained by `\(\color{#20B2AA}{f}\)`. --&gt;
+
+&lt;!-- Our goal is to minimize .hi-slate[reducible error]. --&gt;
+
+
+&lt;!-- --- --&gt;
+&lt;!-- ## How to predict --&gt;
+
+&lt;!-- **How do we minimize reducible error** (and form the best predictions)? --&gt;
+
+&lt;!-- The basic workflow for predictive analysis: --&gt;
+
+&lt;!-- 1. **Choose** a model. --&gt;
+&lt;!-- 2. **Train** the model (estimate its parameters). --&gt;
+&lt;!-- 3. **Assess** its performance. --&gt;
+&lt;!-- 4. Repeat steps 1-3 for different models, and choose the **best** model. --&gt;
+
+&lt;!-- -- --&gt;
+
+&lt;!-- .note[Note:] "Different models" can mean: --&gt;
+
+&lt;!-- * Either completely distinct models (e.g., OLS vs. *k*-nearest neighbors). --&gt;
+&lt;!-- * Or a set of closely related models differing by a **hyperparameter**. --&gt;
+&lt;!--   - E.g., polynomial regression (hyperparameter: polynomial degree). --&gt;
+
+
+---
+## How to predict
+
+The basic workflow for predictive analysis:
+
+1. **Choose** a model.
+2. **Train** the model (estimate its parameters).
+3. **Assess** its performance.
+4. Repeat steps 1-3 for different models, and choose the **best** model.
+
+&lt;!-- -- --&gt;
+
+&lt;!-- .qa[Q] Why don't we do this for causal inference? --&gt;
+&lt;!-- - In causal inference, the best model is determined by outside knowledge (i.e., which research design is most plausible). --&gt;
+&lt;!-- - In prediction, the best model is simply the one that performs best. --&gt;
+
+
+---
+layout: false
+class: inverse, middle
+name: accuracy
+
+# Assessing model accuracy
+
+
+---
+layout: true
+# Model accuracy
+
+---
+## Loss
+
+*Prediction error* is defined as:
+`$$\color{#FFA500}{\mathbf{y}}_i - \hat{\color{#FFA500}{\mathbf{y}}}_i$$`
+&lt;!-- `$$\color{#FFA500}{\mathbf{y}}_i - \hat{\color{#20B2AA}{f}}\!\left( \color{#6A5ACD}{x}_i \right) = \color{#FFA500}{\mathbf{y}}_i - \hat{\color{#FFA500}{\mathbf{y}}}_i$$` --&gt;
+the difference between the label `\(\left( \color{#FFA500}{\mathbf{y}} \right)\)` and its prediction `\(\left( \hat{\color{#FFA500}{\mathbf{y}}} \right)\)`.
+
+The (absolute) distance between a true value and its prediction is often called .b[loss].
+
+The way you choose to use loss to measure model performance is called a **loss function.**
+
+---
+name: accuracy-subtlety
+
+## What loss function should we choose?
+
+How do we compare loss across observations? Many questions:
+
+- Which do you prefer?
+  1. Lots of little errors and a few really large errors.
+  1. Medium-sized errors for everyone.
+
+- Is a 1-unit error (*e.g.*, $1,000) equally bad for everyone?
+
+- Is an overestimate equally bad as an underestimate?
+
+&lt;!-- --- --&gt;
+&lt;!-- ## Subtlety --&gt;
+
+&lt;!-- Defining performance can be tricky... --&gt;
+
+&lt;!-- *Classification:* --&gt;
+
+&lt;!-- - Which is worse? --&gt;
+&lt;!--   1. False positive (*e.g.*, incorrectly diagnosing cancer) --&gt;
+&lt;!--   1. False negative (*e.g.*, missing cancer) --&gt;
+
+&lt;!-- - Which is more important? --&gt;
+&lt;!--   1. True positive (*e.g.*, correct diagnosis of cancer) --&gt;
+&lt;!--   1. True negative (*e.g.*, correct diagnosis of "no cancer") --&gt;
+
+---
+name: mse
+## Most common: MSE
+
+.attn[Mean squared error (MSE)] is the most common loss function in a regression setting. (Not necessarily the best.)
+
+`$$\text{MSE} = \dfrac{1}{n} \sum_{i=1}^n \left[ \color{#FFA500}{y}_i - \hat{\color{#20B2AA}{f}}(\color{#6A5ACD}{x}_i) \right]^2$$`
+
+Note:
+
+1. MSE is small when .hi-slate[prediction error] is small.
+1. MSE .hi-slate[penalizes] big errors more than small errors (the squared part).
+
+---
+name: overfitting
+layout: false
+# Model accuracy
+## Overfitting
+
+Low MSE on the data that trained the model is not necessarily impressive — maybe the model is just **overfitting** our data.
+
+**Tradeoff:** More flexible models...
+
+- might better fit complex systems (lower bias).
+
+- but also might falsely interpret noise as signal (higher variance).
+
+---
+name: training-testing
+
+# Model accuracy
+## Training vs. testing data
+
+**Our real goal:** A model that performs well *on data it has never seen.*
+
+To avoid overfitting, we must:
+
+1. Split our data into a **training set** and a **test set**.
+2. Use the **training set** only to train our model.
+3. Use the **test set** only to measure model performance.
+
+
+---
+class: clear, middle
+layout: true
+
+
+
+---
+
+Fitting a polynomial of degree **1**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-3-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **2**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-4-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **3**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-5-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **4**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-6-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **5**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-7-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **7**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-8-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **11**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-9-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **17**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-10-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+
+Fitting a polynomial of degree **25**
+&lt;img src="13-Learning_files/figure-html/unnamed-chunk-11-1.svg" style="display: block; margin: auto;" /&gt;
+
+---
+layout: false
+name: bias-variance
+# Model accuracy
+## The bias-variance tradeoff
+
+Finding the optimal level of flexibility highlights the .hi-pink[bias]-.hi-purple[variance] .b[tradeoff.]
+
+.hi-pink[Bias:] The error that comes from modeling `\(\color{#20B2AA}{f}\)` with the wrong structure.
+- More flexible models are better equipped to recover complex relationships `\(\left( \color{#20B2AA}{f} \right)\)`, reducing bias.
+- Models that are too simple have high bias.
+
+.hi-purple[Variance:] The amount `\(\hat{\color{#20B2AA}{f}}\)` would change with a different .hi-slate[training sample]
+- If new .hi-slate[training sets] drastically change `\(\hat{\color{#20B2AA}{f}}\)`, then we have a lot of uncertainty about `\(\color{#20B2AA}{f}\)`.
+- Models that are too flexible have high variance.
+
+---
+# Model accuracy
+## The bias-variance tradeoff
+
+The expected value of the .hi-pink[test MSE] can be written
+$$
+`\begin{align}
+  \mathop{E}\left[ \left(\color{#FFA500}{\mathbf{y_0}} - \mathop{\hat{\color{#20B2AA}{f}}}\left(\color{#6A5ACD}{\mathbf{X}_0}\right) \right)^2 \right] =
+  \underbrace{\mathop{\text{Var}} \left( \mathop{\hat{\color{#20B2AA}{f}}}\left(\color{#6A5ACD}{\mathbf{X}_0}\right) \right)}_{\text{Variance}} +
+  \underbrace{\left[ \text{Bias}\left( \mathop{\hat{\color{#20B2AA}{f}}}\left(\color{#6A5ACD}{\mathbf{X}_0}\right) \right) \right]^2}_{\text{Bias}} +
+  \underbrace{\mathop{\text{Var}} \left( \varepsilon \right)}_{\text{Irr. error}}
+\end{align}`
+$$
+
+.b[The tradeoff] in terms of model flexibility:
+
+- At first, adding flexibility reduces bias more than it increases variance.
+- Later on, the bias reduction gets swamped out by increases in variance.
+- At some point, the marginal benefits of flexibility equal marginal costs.
+
+
+---
+class: inverse, middle
+name: resampling
+# Cross-validation
+
+---
+layout: false
+# Cross-validation
+
+**How do we choose the best model?** (e.g., degree of polynomial)
+- Based on test-set MSE? 
+
+--
+- **NO!!!** We will just overfit the test set itself!
+- The test set must be used *only for evaluation.*
+
+Instead, we must conduct model selection *entirely within the training set.*
+
+
+---
+name: resampling-validation
+layout: true
+# Cross-validation
+## The .it[validation set] approach
+
+**Hold out** a subset of our training set to *estimate* the test error.
+
+1. Train each model using the .hi-purple[rest of the training set].
+2. Calculate MSE in the .hi-slate[validation set].
+3. Compare performance and choose the best model.
+
+---
+
+
+
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-validation-set-1.svg" style="display: block; margin: auto;" /&gt;
+
+.col-left[.hi-purple[Full training set]]
+
+
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-validation-set-2-1.svg" style="display: block; margin: auto;" /&gt;
+
+.col-left[.hi-slate[Validation set]]
+.col-right[.hi-purple[Rest of training set]]
+
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-validation-set-3-1.svg" style="display: block; margin: auto;" /&gt;
+
+.col-left[.hi-slate[Validation set]]
+.col-right[.hi-purple[Rest of training set]]
+
+---
+layout: true
+# Cross-validation
+## *k*-fold cross-validation
+
+---
+name: resampling-kcv
+
+Even better is to use .hi[k-fold cross validation].
+
+1. .b[Divide] the training data into `\(k\)` equally sized groups (folds).
+2. .b[Iterate] over the `\(k\)` folds, treating each as a validation set once&lt;br&gt;(training the model on the other `\(k-1\)` folds).
+3. .b[Average] the folds' MSEs to estimate test MSE.
+
+
+---
+exclude: true
+
+
+
+---
+layout: true
+# Cross-validation
+## *k*-fold cross-validation
+
+With `\(k\)`-fold cross validation, we estimate test MSE as
+$$
+`\begin{align}
+  \text{CV}_{(k)} = \dfrac{1}{k} \sum_{i=1}^{k} \text{MSE}_{i}
+\end{align}`
+$$
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-0a-1.svg" style="display: block; margin: auto;" /&gt;
+
+Our `\(k=\)` 5 folds.
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-0b-1.svg" style="display: block; margin: auto;" /&gt;
+
+Each fold takes a turn at .hi-slate[validation]. The other `\(k-1\)` folds .hi-purple[train].
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-1-1.svg" style="display: block; margin: auto;" /&gt;
+
+For `\(k=5\)`, fold number `\(1\)` as the .hi-slate[validation set] produces MSE.sub[k=1].
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-2-1.svg" style="display: block; margin: auto;" /&gt;
+
+For `\(k=5\)`, fold number `\(2\)` as the .hi-slate[validation set] produces MSE.sub[k=2].
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-3-1.svg" style="display: block; margin: auto;" /&gt;
+
+For `\(k=5\)`, fold number `\(3\)` as the .hi-slate[validation set] produces MSE.sub[k=3].
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-4-1.svg" style="display: block; margin: auto;" /&gt;
+
+For `\(k=5\)`, fold number `\(4\)` as the .hi-slate[validation set] produces MSE.sub[k=4].
+---
+
+&lt;img src="13-Learning_files/figure-html/plot-cvk-5-1.svg" style="display: block; margin: auto;" /&gt;
+
+For `\(k=5\)`, fold number `\(5\)` as the .hi-slate[validation set] produces MSE.sub[k=5].
+
+---
+
+Relative to the validation set approach:
+- Uses all the data, so not as sensitive to exactly which observations end up in the validation set.
+- So produces a lower-variance estimate of the test-set MSE.
+
+
+---
+layout: false
+# Summary
+
+.smaller[
+.pull-left[
+[**Prediction vs. causal inference**](#goal)
+- In causal inference we want to estimate the treatment effect `\(\hat{\beta}\)`.
+- In prediction problems we want to estimate the outcome value `\(\hat{Y_i}\)`.
+
+**[Statistical learning](#learning)**
+- Supervised vs. unsupervised learning.
+- Regression vs. classification.
+&lt;!-- - Reducible vs. irreducible error. --&gt;
+]
+.pull-right[
+**[Model accuracy](#accuracy)**
+- Models can be assessed using loss functions that combine prediction errors.
+- For regression problems, MSE is the most common loss function.
+- Using separate testing and training data avoids overfitting.
+
+**[Cross-validation](#resampling)**
+- Resampling methods avoid overfitting in model assessment and selection.
+- Validation set approach.
+&lt;!-- - Leave-one-out cross-validation. --&gt;
+- *k*-fold cross-validation.
+]
+]
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
